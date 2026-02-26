@@ -1,0 +1,15 @@
+[Unit]
+Description=Set CPU and GPU to performance governor
+After=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/bash -c '\
+  echo performance > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor && \
+  echo performance > /sys/devices/system/cpu/cpufreq/policy4/scaling_governor && \
+  echo performance > /sys/devices/system/cpu/cpufreq/policy6/scaling_governor && \
+  echo performance > /sys/class/devfreq/fb000000.gpu/governor'
+
+[Install]
+WantedBy=multi-user.target

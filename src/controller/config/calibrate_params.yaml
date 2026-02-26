@@ -1,0 +1,7 @@
+/**:
+  ros__parameters:
+    linear_correction_factor: 1.00
+    angular_correction_factor: 1.04
+    wheelbase: 0.216
+    track_width: 0.195
+    wheel_diameter: 0.097

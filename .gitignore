@@ -1,0 +1,43 @@
+# Colcon build artifacts (solo en la raíz del workspace)
+/build/
+/install/
+/log/
+
+# Python virtual environment
+.venv/
+
+# libuvc compiled locally (not needed, rebuild with CMake)
+libuvc_install/
+
+# Original source code from manufacturer (large, not ours)
+RobotControllerSourceCode/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+
+# C/C++ build artifacts (solo en la raíz, no en paquetes de terceros)
+*.o
+*.lo
+*.la
+
+# CMake (solo en raíz)
+/CMakeCache.txt
+/CMakeFiles/
+/cmake_install.cmake
+/Makefile
+
+# libuvc build dir (se reconstruye)
+src/libuvc/build/
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+*.swo
+.DS_Store
+
+# PDF (regenerable from markdown)
+mastesdocumentation.pdf

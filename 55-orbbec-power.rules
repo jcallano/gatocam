@@ -1,0 +1,11 @@
+# Disable USB autosuspend for Orbbec Astra Pro Plus (depth + UVC RGB)
+# Prevents uvc_start_streaming: No such device (-4) caused by USB autosuspend
+
+# Depth sensor (2bc5:060f)
+SUBSYSTEM=="usb", ATTR{idVendor}=="2bc5", ATTR{idProduct}=="060f", ACTION=="add", TEST=="power/control", ATTR{power/control}="on"
+
+# UVC RGB camera (2bc5:050f)
+SUBSYSTEM=="usb", ATTR{idVendor}=="2bc5", ATTR{idProduct}=="050f", ACTION=="add", TEST=="power/control", ATTR{power/control}="on"
+
+# Internal hub (Genesys Logic 05e3:0608)
+SUBSYSTEM=="usb", ATTR{idVendor}=="05e3", ATTR{idProduct}=="0608", ACTION=="add", TEST=="power/control", ATTR{power/control}="on"
