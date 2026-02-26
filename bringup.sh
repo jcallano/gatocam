@@ -14,6 +14,10 @@ export LIDAR_TYPE=A1
 export MACHINE_TYPE=JetAuto
 export DEPTH_CAMERA_TYPE=Astra
 
+export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42}
+export ROS_LOCALHOST_ONLY=0
+export FASTRTPS_DEFAULT_PROFILES_FILE=${HOME}/.ros/fastdds_unicast.xml
+
 # Kill any stale nodes from previous runs before starting
 echo "Cleaning up stale nodes..."
 pkill -TERM -f "astra_camera_node|astra_color_node|rplidar_node|ros_robot_controller_node|joint_state_publisher|robot_state_publisher|static_transform_publisher" 2>/dev/null || true

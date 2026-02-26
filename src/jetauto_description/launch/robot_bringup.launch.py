@@ -130,6 +130,21 @@ def generate_launch_description():
         }],
     )
 
+    # Mecanum odometry publisher
+    odom_publisher = Node(
+        package='controller',
+        executable='odom_publisher',
+        name='odom_publisher',
+        output='screen',
+        parameters=[
+            os.path.join(
+                get_package_share_directory('controller'),
+                'config',
+                'calibrate_params.yaml',
+            )
+        ],
+    )
+
     # RViz
     rviz = Node(
         condition=IfCondition(use_rviz),
@@ -159,5 +174,6 @@ def generate_launch_description():
         controller_launch,
         astra,
         color_camera,
+        odom_publisher,
         rviz,
     ])

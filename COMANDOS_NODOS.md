@@ -22,6 +22,7 @@ export DEPTH_CAMERA_TYPE=Astra
 ## 0. Bringup Unificado (forma recomendada)
 
 Lanza todos los nodos de una sola vez con limpieza automática de procesos anteriores.
+Incluye: STM32 bridge, TF tree, LIDAR, cámara Astra (depth+IR+color), y odometría Mecanum.
 
 ```bash
 cd /home/jcallano/ros2_ws
@@ -247,6 +248,132 @@ ros2 topic hz /detections   # debe publicar detecciones de vision_msgs/Detection
 ```
 
 > Suscrito a `/camera/color/image_raw`. Necesita `astra_color_node` activo.
+
+---
+
+## 10. SLAM 2D — slam_toolbox
+
+Construye un mapa de ocupación 2D a partir del LIDAR mientras mueves el robot.
+
+**Prerequisito (una sola vez):**
+```bash
+sudo apt-get install -y ros-jazzy-slam-toolbox
+```
+
+**Lanzar:**
+```bash
+cd /home/jcallano/ros2_ws
+./bringup_slam.sh
+```
+
+Incluye bringup base + odom + slam_toolbox online async.
+
+**Guardar mapa:**
+```bash
+ros2 service call /slam_toolbox/save_map slam_toolbox/srv/SaveMap \
+    "{name: {data: '/home/jcallano/maps/mapa_sala'}}"
+```
+
+**Verificar:**
+```bash
+ros2 topic hz /map     # ~1 Hz
+ros2 topic list | grep slam_toolbox
+```
+
+---
+
+## 11. SLAM 3D — rtabmap_ros
+
+SLAM con fusión de sensores: LIDAR + depth Astra + RGB + odom. Genera mapa 3D.
+
+**Prerequisito (una sola vez):**
+```bash
+sudo apt-get install -y ros-jazzy-rtabmap-ros
+```
+
+**Lanzar (modo mapeado):**
+```bash
+cd /home/jcallano/ros2_ws
+./bringup_slam3d.sh
+```
+
+**Lanzar (modo localización, mapa ya guardado):**
+```bash
+./bringup_slam3d.sh --loc
+```
+
+**Verificar:**
+```bash
+ros2 topic hz /rtabmap/map        # OccupancyGrid 2D
+ros2 topic hz /rtabmap/cloud_map  # Nube de puntos 3D
+```
+
+Mapa persistente en: `~/.ros/rtabmap.db`
+
+---
+
+## 12. Detección de Gatos — YOLOv8 NPU
+
+Detecta gatos (y otros objetos COCO) con YOLOv8n en la NPU Rockchip.
+
+```bash
+cd /home/jcallano/ros2_ws
+./bringup_cats.sh --detect-only
+```
+
+**Solo el nodo YOLO (si bringup ya está corriendo):**
+```bash
+ros2 run jetauto_description jetauto_yolo_rknn.py
+```
+
+**Verificar:**
+```bash
+ros2 topic hz /yolo/detections
+ros2 topic echo /yolo/detections
+```
+
+---
+
+## 13. Seguimiento Autónomo de Gatos
+
+Sigue al gato detectado manteniendo distancia y centrándolo en cámara.
+
+**Bringup completo + detección + seguimiento:**
+```bash
+cd /home/jcallano/ros2_ws
+./bringup_cats.sh
+```
+
+**Solo el seguidor (si YOLO ya está corriendo):**
+```bash
+ros2 run jetauto_description cat_follower_node.py
+```
+
+**Con parámetros ajustados:**
+```bash
+ros2 run jetauto_description cat_follower_node.py --ros-args \
+    -p target_bbox_h:=200.0 \
+    -p max_linear_vel:=0.12 \
+    -p kp_yaw:=0.6 \
+    -p kp_dist:=0.3
+```
+
+**Parámetros principales:**
+
+| Parámetro | Defecto | Descripción |
+|-----------|---------|-------------|
+| `target_bbox_h` | 180 px | Altura de bbox objetivo (≈ distancia deseada) |
+| `max_linear_vel` | 0.15 m/s | Velocidad máxima de avance |
+| `max_angular_vel` | 0.6 rad/s | Velocidad angular máxima |
+| `kp_yaw` | 0.8 | Ganancia proporcional de giro |
+| `kp_dist` | 0.4 | Ganancia proporcional de distancia |
+| `stop_timeout` | 1.5 s | Tiempo sin detección para parar |
+| `min_bbox_h` | 30 px | Tamaño mínimo para considerar detección |
+
+**Parar seguimiento sin detener todo:**
+```bash
+pkill -TERM -f cat_follower_node
+```
 
 ---
 

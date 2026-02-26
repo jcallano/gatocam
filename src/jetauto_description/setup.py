@@ -20,6 +20,7 @@ setup(
         (os.path.join('share', package_name, 'meshes/pro/arm'), glob(os.path.join('meshes/pro/arm', '*.*'))),
         (os.path.join('share', package_name, 'meshes/pro/gripper'), glob(os.path.join('meshes/pro/gripper', '*.*'))),
         (os.path.join('lib', package_name), glob(os.path.join('scripts', '*.py'))),
+        (os.path.join('share', package_name, 'config'), glob(os.path.join('config', '*.yaml'))),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -31,7 +32,8 @@ setup(
     entry_points={
         'console_scripts': [
             'jetauto_teleop_joy.py = jetauto_description.scripts.jetauto_teleop_joy:main',
-            'jetauto_yolo_rknn.py = jetauto_description.scripts.jetauto_yolo_rknn:main'
+            'jetauto_yolo_rknn.py = jetauto_description.scripts.jetauto_yolo_rknn:main',
+            'cat_follower_node.py = jetauto_description.scripts.cat_follower_node:main'
         ],
     },
 )
