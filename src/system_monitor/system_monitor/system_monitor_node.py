@@ -10,8 +10,10 @@ Subsistemas monitorizados:
   - Memoria: RAM usada/disponible, swap
   - GPU/NPU: carga %, temperatura
   - Red    : TX/RX MB/s en end1
-  - Tópicos: Hz real de /scan, /camera/color/image_raw,
-             /camera/depth/image_raw, /odom_raw
+  - Tópicos: Hz real de /scan, /camera/depth/camera_info (proxy depth+IR),
+             /camera/ir/camera_info (proxy color), /odom_raw
+  NOTA: se usan CameraInfo (~200 B) en lugar de Image (~900 KB) para evitar
+  recibir frames completos por DDS solo para medir frecuencia.
 """
 
 import os
@@ -24,7 +26,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from nav_msgs.msg import Odometry
-from sensor_msgs.msg import Image, LaserScan
+from sensor_msgs.msg import CameraInfo, LaserScan
 from std_msgs.msg import Header
 
 try:
@@ -81,28 +83,30 @@ class SystemMonitorNode(Node):
         self._pub = self.create_publisher(
             DiagnosticArray, '/system_monitor/diagnostics', 10)
 
-        # Subscripciones para medir Hz de tópicos clave
-        # QoS best-effort para no bloquear si el sensor no publica
+        # Subscripciones para medir Hz de tópicos clave.
+        # Se usan CameraInfo (~200 B/msg) en lugar de Image (~900 KB/msg):
+        # suscribirse a imágenes completas para solo contar Hz genera
+        # ~15 MB/s de tráfico DDS innecesario y sobrecarga térmica.
         be_qos = QoSProfile(
-            depth=10,
+            depth=5,
             reliability=ReliabilityPolicy.BEST_EFFORT,
             durability=DurabilityPolicy.VOLATILE,
         )
         self._hz_windows: dict[str, list[float]] = {
             '/scan': [],
-            '/camera/color/image_raw': [],
-            '/camera/depth/image_raw': [],
+            '/camera/depth/camera_info': [],   # proxy para depth Hz (~200 B)
+            '/camera/ir/camera_info': [],       # proxy para color/IR Hz (~200 B)
             '/odom_raw': [],
         }
         self.create_subscription(
             LaserScan, '/scan',
             lambda _: self._stamp('/scan'), be_qos)
         self.create_subscription(
-            Image, '/camera/color/image_raw',
-            lambda _: self._stamp('/camera/color/image_raw'), be_qos)
+            CameraInfo, '/camera/depth/camera_info',
+            lambda _: self._stamp('/camera/depth/camera_info'), be_qos)
         self.create_subscription(
-            Image, '/camera/depth/image_raw',
-            lambda _: self._stamp('/camera/depth/image_raw'), be_qos)
+            CameraInfo, '/camera/ir/camera_info',
+            lambda _: self._stamp('/camera/ir/camera_info'), be_qos)
         self.create_subscription(
             Odometry, '/odom_raw',
             lambda _: self._stamp('/odom_raw'), be_qos)
@@ -400,25 +404,25 @@ class SystemMonitorNode(Node):
         s.hardware_id = 'DDS/domain42'
 
         hz_scan  = self._hz('/scan')
-        hz_color = self._hz('/camera/color/image_raw')
-        hz_depth = self._hz('/camera/depth/image_raw')
+        hz_depth = self._hz('/camera/depth/camera_info')
+        hz_ir    = self._hz('/camera/ir/camera_info')
         hz_odom  = self._hz('/odom_raw')
 
         s.level = max(
             self._level(hz_scan,  *self._THRESHOLDS['hz_scan'],  low=True),
-            self._level(hz_color, *self._THRESHOLDS['hz_image'], low=True),
             self._level(hz_depth, *self._THRESHOLDS['hz_image'], low=True),
+            self._level(hz_ir,    *self._THRESHOLDS['hz_image'], low=True),
             self._level(hz_odom,  *self._THRESHOLDS['hz_odom'],  low=True),
         )
         s.message = (
-            f'scan={hz_scan:.1f}Hz  color={hz_color:.1f}Hz  '
-            f'depth={hz_depth:.1f}Hz  odom={hz_odom:.1f}Hz'
+            f'scan={hz_scan:.1f}Hz  depth={hz_depth:.1f}Hz  '
+            f'IR={hz_ir:.1f}Hz  odom={hz_odom:.1f}Hz'
         )
         s.values = [
-            self._kv('scan Hz',  hz_scan),
-            self._kv('color Hz', hz_color),
-            self._kv('depth Hz', hz_depth),
-            self._kv('odom Hz',  hz_odom),
+            self._kv('scan Hz',       hz_scan),
+            self._kv('depth info Hz', hz_depth),
+            self._kv('IR info Hz',    hz_ir),
+            self._kv('odom Hz',       hz_odom),
         ]
         return s
 

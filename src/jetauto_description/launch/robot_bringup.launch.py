@@ -14,6 +14,7 @@ def generate_launch_description():
     lidar_port = LaunchConfiguration('lidar_port', default='/dev/ttyUSB0')
     lidar_frame = LaunchConfiguration('lidar_frame', default='lidar_frame')
     astra_launch = LaunchConfiguration('astra_launch', default='astra_pro.launch.xml')
+    enable_point_cloud = LaunchConfiguration('enable_point_cloud', default='true')
     display = LaunchConfiguration('display', default=os.environ.get('DISPLAY', ':0'))
     default_rviz_config = os.path.join(
         get_package_share_directory('jetauto_description'),
@@ -109,7 +110,7 @@ def generate_launch_description():
             'ir_width': '640',
             'ir_height': '480',
             'ir_fps': '30',
-            'enable_point_cloud': 'true',
+            'enable_point_cloud': enable_point_cloud,
             'use_uvc_camera': 'false',
         }.items(),
     )
@@ -160,6 +161,7 @@ def generate_launch_description():
         DeclareLaunchArgument('lidar_port', default_value=lidar_port),
         DeclareLaunchArgument('lidar_frame', default_value=lidar_frame),
         DeclareLaunchArgument('astra_launch', default_value=astra_launch),
+        DeclareLaunchArgument('enable_point_cloud', default_value=enable_point_cloud),
         DeclareLaunchArgument('rviz_config', default_value=rviz_config),
         DeclareLaunchArgument('display', default_value=display),
         DeclareLaunchArgument('controller_port', default_value=controller_port),

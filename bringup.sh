@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Uso: ./bringup.sh [--no-pointcloud]
+#   --no-pointcloud  Deshabilita PointCloud2 (~20-30% menos CPU en astra_camera_node)
+#                    Usar cuando no se necesita SLAM ni nube de puntos 3D
 set -euo pipefail
 
 # ROS setup scripts reference variables that may be unset; temporarily disable nounset.
@@ -34,6 +37,19 @@ MONITOR_PID=$!
 # Matar el monitor al salir (Ctrl+C o fin normal del bringup)
 trap "echo 'Stopping system_monitor...'; kill ${MONITOR_PID} 2>/dev/null || true" EXIT INT TERM
 
+# ── Parámetros opcionales ─────────────────────────────────────────────────────
+ENABLE_POINTCLOUD=true
+for arg in "$@"; do
+    case "$arg" in
+        --no-pointcloud) ENABLE_POINTCLOUD=false ;;
+    esac
+done
+
+if [ "$ENABLE_POINTCLOUD" = "false" ]; then
+    echo "PointCloud2 DESACTIVADO (modo bajo consumo)"
+fi
+
 # ── Bringup principal (foreground — bloquea hasta Ctrl+C) ────────────────────
 echo "Starting unified bringup (no RViz by default)..."
-ros2 launch jetauto_description robot_bringup.launch.py
+ros2 launch jetauto_description robot_bringup.launch.py \
+    enable_point_cloud:=${ENABLE_POINTCLOUD}

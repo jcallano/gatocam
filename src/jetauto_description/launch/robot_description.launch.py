@@ -40,7 +40,7 @@ def generate_launch_description():
         name='joint_state_publisher',
         output='screen',
         parameters=[{'source_list': ['/controller_manager/joint_states'],
-                     'rate': 20.0}]
+                     'rate': 10.0}]
     )
     
     joint_state_publisher_gui_node = Node(
