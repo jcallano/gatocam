@@ -2,7 +2,7 @@
 
 **Plataforma:** Hiwonder JetAuto · Orange Pi 5 (RK3588S) · ROS 2 Jazzy Jalisco
 **Propósito:** Robot móvil de monitoreo de gatos en interiores (~100 m², Omán)
-**Fecha última actualización:** 2026-02-26
+**Fecha última actualización:** 2026-03-02
 
 ---
 
@@ -153,7 +153,7 @@ cat /sys/bus/usb/devices/5-1.2/power/control  # debe decir "on"
 ├── .venv/                  # Python venv con pyserial, rknn-toolkit-lite2, etc.
 ├── libuvc_install/         # libuvc compilada manualmente para AArch64
 ├── bringup.sh              # script de arranque completo
-└── mastesdocumentation.md  # este archivo
+└── README.md               # este archivo (documentación maestra)
 ```
 
 ### 3.2 Paquetes del Workspace
@@ -168,6 +168,7 @@ cat /sys/bus/usb/devices/5-1.2/power/control  # debe decir "on"
 | `jetauto_description` | Python (datos) | URDF/Xacro, meshes, RViz config, scripts Python |
 | `ros2_astra_camera` | C++ | Driver Astra Pro Plus (depth + IR + pointcloud via OpenNI/libuvc) |
 | `rplidar_ros` | C++ | Driver RPLidar A1 |
+| `system_monitor` | Python | Métricas de rendimiento del SBC (CPU/RAM/GPU/NPU/red/Hz tópicos) |
 | `vision_opencv` | C++ | cv_bridge (compilado desde fuente — ver nota ABI) |
 | `image_common` | C++ | image_transport (compilado desde fuente — ver nota ABI) |
 
@@ -225,8 +226,13 @@ source install/setup.bash
 | `src/jetauto_description/launch/robot_description.launch.py` | TF tree + TF estático cámara |
 | `src/jetauto_description/scripts/astra_color_node.py` | Nodo RGB cámara (raw V4L2 + mppjpegdec) |
 | `src/jetauto_description/scripts/jetauto_teleop_joy.py` | Teleoperación gamepad |
+| `src/jetauto_description/scripts/cat_follower_node.py` | Seguimiento autónomo de gatos via YOLO |
 | `src/jetauto_description/rviz/sensors.rviz` | Config RViz sensores |
+| `src/system_monitor/system_monitor/system_monitor_node.py` | Nodo monitor de rendimiento del SBC |
 | `bringup.sh` | Script arranque con limpieza de procesos stale |
+| `bringup_cats.sh` | Bringup + YOLO NPU + cat_follower_node |
+| `bringup_slam.sh` | Bringup + slam_toolbox 2D |
+| `bringup_slam3d.sh` | Bringup + rtabmap LIDAR+depth+RGB |
 
 ---
 
@@ -400,6 +406,26 @@ Sub-comandos destacados del Function ID `0x05`:
 - **Requiere:** `ros_robot_controller` activo
 - Ver sección 8 para mapeo completo de controles
 
+### 5.8 system_monitor (Monitor de Rendimiento del SBC)
+
+- **Paquete:** `system_monitor`
+- **Ejecutable:** `ros2 run system_monitor system_monitor`
+- **Topic publicado:** `/system_monitor/diagnostics` (`diagnostic_msgs/DiagnosticArray`) @ **1 Hz**
+
+Monitoriza cinco subsistemas del Orange Pi 5 (RK3588S):
+
+| Subsistema | Métricas clave |
+|------------|----------------|
+| `CPU` | Uso % A55 (cores 0–3) y A76 (cores 4–7) · Frecuencia MHz por cluster · Temp °C bigcore0, bigcore1, littlecore |
+| `Memoria` | RAM usada/disponible/total (MB) · Uso % · Swap usada (MB) |
+| `GPU_NPU` | Carga Mali-G610 % · Temp GPU °C · Carga RKNPU2 % · Temp NPU °C |
+| `Red` | TX / RX en `end1` (MB/s) |
+| `Topicos_ROS` | Hz real de `/scan`, `/camera/color/image_raw`, `/camera/depth/image_raw`, `/odom_raw` |
+
+Cada subsistema tiene nivel `OK` / `WARN` / `ERROR` basado en umbrales configurados en el código.
+
+> **Nota NPU:** el driver devfreq del kernel RK3588S reporta `100%` cuando el firmware RKNPU está cargado aunque no haya inferencias activas. El valor real requiere acceso root a `/sys/kernel/debug/rknpu/load`.
+
 ---
 
 ## 6. Topics y Mensajes
@@ -424,6 +450,8 @@ Sub-comandos destacados del Function ID `0x05`:
 | `/camera/depth/points` | `sensor_msgs/PointCloud2` | astra_camera → salida | ~20 fps, jitter alto |
 | `/camera/ir/image_raw` | `sensor_msgs/Image` | astra_camera → salida | ~30 fps estable |
 | `/camera/color/image_raw` | `sensor_msgs/Image` | astra_color_node → salida | bgr8, ~15–17 fps con depth+IR |
+| `/yolo/detections` | `vision_msgs/Detection2DArray` | jetauto_yolo_rknn → salida | solo con bringup_cats.sh |
+| `/system_monitor/diagnostics` | `diagnostic_msgs/DiagnosticArray` | system_monitor → salida | 1 Hz · CPU/RAM/GPU/NPU/red/Hz |
 | `/tf`, `/tf_static` | `tf2_msgs/TFMessage` | robot_description → salida | árbol TF completo |
 
 ### 6.2 Servicios STM32
@@ -694,7 +722,13 @@ Lanza en orden (paralelo con MJPG — no hay race condition de ancho de banda):
 3. `ros_robot_controller.launch.py` (bridge STM32)
 4. `astra_pro.launch.xml` (depth + IR, `enable_color:=false`, `use_uvc_camera:=false`)
 5. `astra_color_node.py` (RGB MJPG + mppjpegdec, namespace `camera`)
-6. `rviz2` (solo si `use_rviz:=true`)
+6. `odom_publisher` (cinemática Mecanum + odometría)
+7. `rviz2` (solo si `use_rviz:=true`)
+
+**Monitor de rendimiento** (terminal adicional, opcional):
+```bash
+ros2 run system_monitor system_monitor
+```
 
 ```bash
 # Sin RViz (por defecto):
@@ -829,31 +863,35 @@ claude --dangerously-skip-permissions
 
 ## 12. Estado Actual y Pendientes
 
-### 12.1 Estado Validado (2026-02-26)
+### 12.1 Estado Validado (2026-03-02)
 
 | Sistema | Estado | Notas |
 |---------|--------|-------|
 | STM32 bridge | **OK** | `/dev/ttyACM0`, 1 Mbps, IMU funciona |
-| Odometría Mecanum | **OK** | `/cmd_vel` → `MotorsState` correcto |
+| Odometría Mecanum | **OK** | `/cmd_vel` → `MotorsState` correcto · integrado en `robot_bringup.launch.py` |
 | RPLidar A1 | **OK** | `/scan` ~7 Hz, frame `lidar_frame` alineado |
 | Astra depth + IR | **OK** | Depth 12–30 Hz, IR 30 Hz, PointCloud2 ~20 fps |
 | Astra color RGB | **OK** | ~15–17 fps, MJPG + mppjpegdec, estable 65 s |
 | TF tree completo | **OK** | `robot_description` publica con envs correctos |
 | Bringup unificado | **OK** | `bringup.sh` + `robot_bringup.launch.py` |
-| RViz config | **OK** | `sensors.rviz` con color, depth, scan, TF |
+| RViz config | **OK** | `sensors.rviz` · Fixed Frame: `base_link` |
 | Performance governor | **OK** | Persistente vía systemd |
 | NPU RKNPU | **OK** | `/dev/dri/renderD129`, hasta 1.0 GHz |
+| FastDDS unicast | **OK** | `~/.ros/fastdds_unicast.xml` · domain 42 · puertos 17910–17930 |
+| RViz2 desde VM | **OK** | VM jcallano-vmdev (192.168.100.228) · Samba `/mnt/ros2_ws` |
+| Monitor de rendimiento | **OK** | `system_monitor` · `/system_monitor/diagnostics` @ 1 Hz |
+| Seguimiento de gatos | **OK** | `bringup_cats.sh` · `cat_follower_node.py` · YOLOv8n NPU |
 
 ### 12.2 Pendientes
 
 | Prioridad | Tarea | Notas |
 |-----------|-------|-------|
-| Alta | Integrar `odom_publisher` en `robot_bringup.launch.py` | Actualmente se lanza manualmente |
-| Media | Mejorar tasa color RGB | ~15–17 fps actual; investigar tuning GStreamer mppjpegdec |
-| Media | Validar SLAM 3D | Usar depth + RGB + Lidar + odometría + IMU |
+| Alta | Confirmar PointCloud2 e imágenes en RViz2 desde VM | Fix `maxMessageSize=1400` aplicado, bringup pendiente de reinicio |
+| Media | Instalar slam_toolbox y rtabmap | `sudo apt install ros-jazzy-slam-toolbox ros-jazzy-rtabmap-ros` |
+| Media | Validar SLAM 2D y 3D | Probar `bringup_slam.sh` y `bringup_slam3d.sh` |
 | Media | RPLidar SL_RESULT_OPERATION_TIMEOUT al arrancar | Posible boot contention; añadir retry en launch |
-| Baja | Detección de gatos con NPU | YOLOv8n.rknn listo, falta integración completa en bringup |
-| Baja | Mapa de recursos bajo carga completa | Confirmar margen CPU/RAM para NPU + SLAM simultáneos |
+| Baja | NPU load real sin root | Actualmente devfreq reporta 100% siempre · necesita CAP_SYS_ADMIN |
+| Baja | Mejorar tasa color RGB | ~15–17 fps actual · investigar tuning GStreamer mppjpegdec |
 
 ---
 

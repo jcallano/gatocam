@@ -29,6 +29,12 @@ cd /home/jcallano/ros2_ws
 ./bringup.sh
 ```
 
+Añadir monitor de rendimiento en terminal adicional (opcional):
+
+```bash
+ros2 run system_monitor system_monitor
+```
+
 Con RViz incluido:
 
 ```bash
@@ -377,6 +383,64 @@ pkill -TERM -f cat_follower_node
 
 ---
 
+## 14. Monitor de Rendimiento del Sistema
+
+Publica métricas de hardware del Orange Pi 5 (RK3588S) en tiempo real.
+
+**Topic:** `/system_monitor/diagnostics` — `diagnostic_msgs/DiagnosticArray` @ 1 Hz
+
+**Subsistemas monitorizados:**
+
+| Subsistema | Métricas |
+|------------|----------|
+| `CPU` | Uso % por cluster (A55 / A76), frecuencia MHz, temperatura °C (bigcore0, bigcore1, littlecore) |
+| `Memoria` | RAM usada / disponible / total (MB), uso %, swap usada (MB) |
+| `GPU_NPU` | Carga GPU Mali % + temp °C, carga NPU RKNPU2 % + temp °C |
+| `Red` | TX / RX en `end1` (MB/s) |
+| `Topicos_ROS` | Hz real de `/scan`, `/camera/color/image_raw`, `/camera/depth/image_raw`, `/odom_raw` |
+
+**Lanzar:**
+```bash
+ros2 run system_monitor system_monitor
+```
+
+**Ver en texto:**
+```bash
+ros2 topic echo /system_monitor/diagnostics
+```
+
+**Ver en RViz / rqt (visual con colores OK/WARN/ERROR):**
+```bash
+ros2 run rqt_runtime_monitor rqt_runtime_monitor
+```
+
+**Ver solo el resumen de cada subsistema:**
+```bash
+ros2 topic echo /system_monitor/diagnostics --field status[0].message   # CPU
+ros2 topic echo /system_monitor/diagnostics --field status[1].message   # Memoria
+ros2 topic echo /system_monitor/diagnostics --field status[2].message   # GPU/NPU
+ros2 topic echo /system_monitor/diagnostics --field status[3].message   # Red
+ros2 topic echo /system_monitor/diagnostics --field status[4].message   # Tópicos ROS
+```
+
+**Umbrales de alerta:**
+
+| Métrica | WARN | ERROR |
+|---------|------|-------|
+| CPU A76 uso | > 80 % | > 95 % |
+| CPU temperatura | > 80 °C | > 90 °C |
+| GPU temperatura | > 80 °C | > 90 °C |
+| RAM disponible | < 300 MB | < 150 MB |
+| Swap usada | > 100 MB | > 500 MB |
+| `/scan` Hz | < 5 Hz | < 1 Hz |
+| Imagen Hz | < 10 Hz | < 5 Hz |
+| `/odom_raw` Hz | < 20 Hz | < 5 Hz |
+
+> **Nota NPU:** el devfreq del kernel RK3588S reporta `100%` cuando el firmware RKNPU está cargado
+> aunque no haya inferencias activas. El valor real requiere acceso root a `/sys/kernel/debug/rknpu/load`.
+
+---
+
 ## Diagnóstico Rápido
 
 ```bash
@@ -385,6 +449,9 @@ ros2 node list
 
 # Ver todos los topics y sus tipos
 ros2 topic list -t
+
+# Resumen de rendimiento del sistema (CPU, RAM, GPU, red, Hz sensores)
+ros2 topic echo /system_monitor/diagnostics --once
 
 # Verificar tasas de todos los topics de cámara
 ros2 topic hz /camera/color/image_raw
