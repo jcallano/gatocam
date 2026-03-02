@@ -32,6 +32,21 @@ __pycache__/
 # libuvc build dir (se reconstruye)
 src/libuvc/build/
 
+# Colcon build/install/log dentro de src/ (anidados)
+src/build/
+src/install/
+src/log/
+
+# Compiled shared libraries
+*.so
+
+# Generated Makefiles in third-party SDK
+src/rplidar_ros/sdk/Makefile
+
+# ROS2 TF frame exports (regenerables)
+frames_*.gv
+frames_*.pdf
+
 # Logs and temp files
 *.log
 *.tmp
